@@ -19,6 +19,7 @@ use crate::utils::{Opaque, OwnedHandle};
 pub struct JobRunnerOptions {
     min_concurrency: usize,
     max_concurrency: usize,
+    max_retry_text: Option<String>,
     channel_names: Option<Vec<String>>,
     dispatch: Opaque<Arc<dyn Fn(CurrentJob) + Send + Sync + 'static>>,
     pool: Pool<Postgres>,
@@ -217,10 +218,23 @@ impl JobRunnerOptions {
             min_concurrency: 16,
             max_concurrency: 32,
             channel_names: None,
+            max_retry_text: None,
             keep_alive: true,
             dispatch: Opaque(Arc::new(f)),
             pool: pool.clone(),
         }
+    }
+
+    /// Set the max retry text for this job runner. When the text is set it will be sent
+    /// to directly to sql. The text is not validated.
+    ///
+    /// Please see https://www.postgresql.org/docs/current/functions-datetime.html for example
+    /// text.
+    ///
+    /// Default is None.
+    pub fn set_max_retry_text(&mut self, text: Option<String>) -> &mut Self {
+        self.max_retry_text = text;
+        self
     }
     /// Set the concurrency limits for this job runner. When the number of active
     /// jobs falls below the minimum, the runner will poll for more, up to the maximum.
@@ -321,9 +335,10 @@ async fn poll_and_dispatch(
     log::info!("Polling for messages");
 
     let options = &job_runner.options;
-    let messages = sqlx::query_as::<_, PolledMessage>("SELECT * FROM mq_poll($1, $2)")
+    let messages = sqlx::query_as::<_, PolledMessage>("SELECT * FROM mq_poll($1, $2, $3)")
         .bind(&options.channel_names)
         .bind(batch_size)
+        .bind(&options.max_retry_text)
         .fetch_all(&options.pool)
         .await?;
 
