@@ -127,7 +127,7 @@ BEGIN
             AND mq_msgs.channel_args = active_channels.args
             AND NOT mq_uuid_exists(mq_msgs.after_message_id)
             ORDER BY mq_msgs.attempt_at ASC
-            LIMIT batch_size
+            LIMIT batch_size FOR UPDATE
         ) AS msgs ON TRUE
         LIMIT batch_size
     ) AS messages_to_update
