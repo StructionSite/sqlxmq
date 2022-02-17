@@ -40,7 +40,7 @@ BEGIN
         mq_payloads.name,
         mq_payloads.payload_json::TEXT,
         mq_payloads.payload_bytes,
-        mq_msgs.retry_backoff / 2,
+        CASE WHEN max_retry_text IS NULL THEN mq_msgs.retry_backoff / 2 WHEN mq_msgs.retry_backoff = max_retry_text::interval THEN max_retry_text::interval ELSE mq_msgs.retry_backoff / 2 END,
         interval '0' AS wait_time;
 
     IF NOT FOUND THEN
